@@ -231,7 +231,18 @@
 #endif
 
 #if USE_AD_TOUCH
-/*No settings*/
+#define  LV_USE_TPCAL      1
+#  define NVM_READ_FUNC         SST25ReadWord
+#  define NVM_WRITE_FUNC        SST25WriteWord
+#  define NVM_SECTOR_ERASE_FUNC SST25SectorErase
+
+# define  TOUCH_INIT       ADtouchInit
+# define  TOUCH_READ       ADtouchReadInput
+# define  TOUCH_STORE_CAL  ADtouchStoreCalibration
+# define  TOUCH_LOAD_CAL   ADtouchLoadCalibration
+# define  TOUCH_CHECK_CAL  ADtouchCheckForCalibration
+# define  TOUCH_TICK       ADtouchDetectPosition
+
 #endif
 
 
@@ -278,6 +289,15 @@
 #if USE_EVDEV
 #  define EVDEV_NAME   "/dev/input/event0"        /*You can use the "evtest" Linux tool to get the list of devices and test them*/
 #  define EVDEV_SWAP_AXES         0               /*Swap the x and y axes of the touchscreen*/
+
+#  define TOUCH_CAL_FILE     "touchcal.dat"
+#
+# define  TOUCH_INIT       evdev_init
+# define  TOUCH_READ       evdev_read
+# define  TOUCH_STORE_CAL  evdev_store_calibration
+# define  TOUCH_LOAD_CAL   evdev_load_calibration
+# define  TOUCH_CHECK_CAL  NULL
+
 
 #  define EVDEV_SCALE             0               /* Scale input, e.g. if touchscreen resolution does not match display resolution */
 #  if EVDEV_SCALE

@@ -33,10 +33,28 @@ extern "C" {
 /*********************
  *      DEFINES
  *********************/
+#define SAMPLE_POINTS   4
+
+// Default calibration points
+#define TOUCHCAL_ULX       149
+#define TOUCHCAL_ULY       825
+#define TOUCHCAL_URX       898
+#define TOUCHCAL_URY       852
+#define TOUCHCAL_LRX       898
+#define TOUCHCAL_LRY       210
+#define TOUCHCAL_LLX       144
+#define TOUCHCAL_LLY       193
+#define TOUCHCAL_DEF_OFST  30
 
 /**********************
  *      TYPEDEFS
  **********************/
+typedef struct __attribute__ ((packed))
+{
+   lv_point_t  points[SAMPLE_POINTS];
+   uint16_t        scn_ofst;      // location of calibration circles from corner of screen
+   uint16_t        crc;
+} t_Tpcal;
 
 /**********************
  * GLOBAL PROTOTYPES
@@ -60,7 +78,10 @@ bool evdev_set_file(char* dev_name);
  */
 bool evdev_read(lv_indev_drv_t * drv, lv_indev_data_t * data);
 
+bool  evdev_store_calibration(t_Tpcal* pCal);
 
+
+bool  evdev_load_calibration(t_Tpcal* pCal);
 
 /**********************
  *      MACROS

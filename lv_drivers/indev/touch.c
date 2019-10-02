@@ -13,47 +13,26 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "../../lvgl/lvgl.h"
+#include "../../lv_drv_conf.h"
 // TODO change the following #include so that we can work with any touchscreen device
-#include "evdev.h"
+
 #include "touch.h"
 
+#ifdef DEBUG
+#define DEBUG_PRINT(fmt, args...)    printf(fmt, ## args)
+#else
+#define DEBUG_PRINT(fmt, args...)    /* Don't do anything in release builds */
+#endif
 
-/*********************
- *      DEFINES
- *********************/
-#define SAMPLE_POINTS      4
-
-
-#define TOUCH_CAL_FILE     "touchcal.dat"
-
-
-// Default calibration points
-#define TOUCHCAL_ULX       149
-#define TOUCHCAL_ULY       825
-#define TOUCHCAL_URX       898
-#define TOUCHCAL_URY       852
-#define TOUCHCAL_LRX       898
-#define TOUCHCAL_LRY       210
-#define TOUCHCAL_LLX       144
-#define TOUCHCAL_LLY       193
-#define TOUCHCAL_DEF_OFST  30
 
 /**********************
  *      TYPEDEFS
  **********************/
-typedef struct __attribute__ ((packed))
-{
-   lv_point_t  points[SAMPLE_POINTS];
-   uint16_t        scn_ofst;      // location of calibration circles from corner of screen
-   uint16_t        crc;
-} t_Tpcal;
 
 /**********************
  *  STATIC PROTOTYPES
  **********************/
 static void touchCalculateCalpoints(t_Tpcal* pCal);
-static bool  touchStoreCalibration(t_Tpcal* pCal);
-static bool  touchCheckForCalibration(void);
 static bool  touchLoadCalibration(void);
 
 
@@ -75,6 +54,13 @@ static const t_Tpcal defCal = {
 
 static t_Tpcal tpCal = {0};
 
+static bool (*pdev_init)(void) = TOUCH_INIT;
+static bool (*pdev_read)(lv_indev_drv_t * drv, lv_indev_data_t * data) = TOUCH_READ;
+static bool (*dev_store_calibration)(t_Tpcal* pCal) = TOUCH_STORE_CAL;
+static bool (*dev_load_calibration)(t_Tpcal* pCal) = TOUCH_LOAD_CAL;
+static bool (*dev_check_cal_req)(void) = TOUCH_CHECK_CAL;
+
+
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
@@ -82,16 +68,17 @@ int32_t touchInit(void)
 {
    bool calRequired = false;
 
-   if(!evdev_init())
+   if(!pdev_init())
       return TOUCH_DRV_FAIL;
 
    if(!touchLoadCalibration())
    {
       calRequired = true;
    }
-   else if(touchCheckForCalibration())
+   else if(dev_check_cal_req != NULL)
    {
-      calRequired = true;
+      if(dev_check_cal_req())
+         calRequired = true;
    }
 
    if(calRequired)
@@ -104,11 +91,11 @@ int32_t touchInit(void)
 
 bool touchRead(lv_indev_drv_t * drv, lv_indev_data_t * data)
 {
-   bool bStatus = evdev_read(drv, data);
+   bool bStatus = pdev_read(drv, data);
 
    if(data->state == LV_INDEV_STATE_PR)
    {
-      printf("raw x:%d. raw y: %d\n", data->point.x, data->point.y);
+      DEBUG_PRINT("raw x:%d. raw y: %d\n", data->point.x, data->point.y);
    }
 
    // scaling
@@ -129,7 +116,7 @@ bool touchRead(lv_indev_drv_t * drv, lv_indev_data_t * data)
 
    if(data->state == LV_INDEV_STATE_PR)
    {
-      printf("x: %d, y: %d\n", data->point.x, data->point.y);
+      DEBUG_PRINT("x: %d, y: %d\n", data->point.x, data->point.y);
    }
 
    return bStatus;
@@ -138,7 +125,7 @@ bool touchRead(lv_indev_drv_t * drv, lv_indev_data_t * data)
 
 bool touchReadRaw(lv_indev_drv_t * drv, lv_indev_data_t * data)
 {
-   bool bStatus = evdev_read(drv, data);
+   bool bStatus = pdev_read(drv, data);
 
    return bStatus;
 }
@@ -149,21 +136,22 @@ bool touchDoCalibration(lv_point_t* pPoints, uint16_t ofst)
 {
    bool bSuccess = false;
    t_Tpcal cal;
-
-   for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
+   uint32_t i;
+   
+   for(i = 0; i < SAMPLE_POINTS; i++)
    {
-      printf("x: %d, y: %d\r\n", pPoints[i].x, pPoints[i].y);
+      DEBUG_PRINT("x: %d, y: %d\r\n", pPoints[i].x, pPoints[i].y);
    }
 
    memcpy(cal.points, pPoints, SAMPLE_POINTS*sizeof(lv_point_t));
    cal.scn_ofst = ofst;
 
-   printf("ofst:%d\n", ofst);
-   printf("cal.scn_ofst:%d\n", cal.scn_ofst);
+   DEBUG_PRINT("ofst:%d\n", ofst);
+   DEBUG_PRINT("cal.scn_ofst:%d\n", cal.scn_ofst);
 
    touchCalculateCalpoints(&cal);
 
-   if(touchStoreCalibration(&cal))
+   if(dev_store_calibration(&cal))
       bSuccess = true;
 
    return bSuccess;
@@ -181,7 +169,7 @@ static void touchCalculateCalpoints(t_Tpcal* pCal)  //lv_point_t* pPoints, WORD 
    int32_t trAhold, trBhold, trChold, trDhold;
    int32_t test1, test2;                          // temp variables (must be signed type)
 
-   printf("scn_ofst:%d\n", pCal->scn_ofst);
+   DEBUG_PRINT("scn_ofst:%d\n", pCal->scn_ofst);
 
 
    lv_point_t scrPoints[SAMPLE_POINTS] =
@@ -195,7 +183,7 @@ static void touchCalculateCalpoints(t_Tpcal* pCal)  //lv_point_t* pPoints, WORD 
    int32_t xmd_1 = pCal->points[1].x - pCal->points[0].x;
    int32_t xmd_2 = pCal->points[2].x - pCal->points[3].x;
 
-   printf("xmd1:%d, xmd2:%d\n", xmd_1, xmd_2);
+   DEBUG_PRINT("xmd1:%d, xmd2:%d\n", xmd_1, xmd_2);
 
    xmd = (xmd_1 + xmd_2)/2;
    xmt = LV_HOR_RES_MAX - (2 * pCal->scn_ofst);
@@ -204,7 +192,7 @@ static void touchCalculateCalpoints(t_Tpcal* pCal)  //lv_point_t* pPoints, WORD 
    int32_t ymd_1 = pCal->points[3].y - pCal->points[0].y;
    int32_t ymd_2 = pCal->points[2].y - pCal->points[1].y;
 
-   printf("ymd1:%d, ymd2:%d\n", ymd_1, ymd_2);
+   DEBUG_PRINT("ymd1:%d, ymd2:%d\n", ymd_1, ymd_2);
 
    ymd = (ymd_1 + ymd_2)/2;
    ymt = LV_VER_RES_MAX - (2 * pCal->scn_ofst);
@@ -221,7 +209,7 @@ static void touchCalculateCalpoints(t_Tpcal* pCal)  //lv_point_t* pPoints, WORD 
    xc2 -= ((xmt * (pCal->points[2].x + pCal->points[3].x))/xmd_2);
    xc2 /= 2;
 
-   printf("xc1:%d, xc2:%d\n", xc1, xc2);
+   DEBUG_PRINT("xc1:%d, xc2:%d\n", xc1, xc2);
 
    // y right
    int32_t yc1 = LV_VER_RES_MAX;
@@ -233,90 +221,28 @@ static void touchCalculateCalpoints(t_Tpcal* pCal)  //lv_point_t* pPoints, WORD 
    yc2 -= ((ymt * (pCal->points[2].y + pCal->points[1].y))/ymd_2);
    yc2 /= 2;
 
-   printf("yc1:%d, yc2:%d\n", yc1, yc2);
+   DEBUG_PRINT("yc1:%d, yc2:%d\n", yc1, yc2);
 
    // take averages
    yc = (yc1 + yc2)/2;
    xc = (xc1 + xc2)/2;
 
-   printf("xmt:%d ymt:%d, xmd: %d, ymd:%d, xc:%d, yc:%d\n", xmt, ymt, xmd, ymd, xc, yc);
+   DEBUG_PRINT("xmt:%d ymt:%d, xmd: %d, ymd:%d, xc:%d, yc:%d\n", xmt, ymt, xmd, ymd, xc, yc);
 
 }
 
-static bool  touchStoreCalibration(t_Tpcal* pCal)
-{
-   FILE* fCal;
-
-   if((fCal = fopen(TOUCH_CAL_FILE, "w")) == NULL)
-   {
-      return false;
-   }
-
-   // Write out calibration readings
-   for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
-   {
-      fprintf(fCal, "%d %d\n", pCal->points[i].x, pCal->points[i].y);
-   }
-   // Write out the screen offset location for cal point
-   fprintf(fCal, "%d\r\n", pCal->scn_ofst);
-
-   fclose(fCal);
-
-   // Copy into active calibration points
-   memcpy(tpCal.points, pCal->points, sizeof(tpCal.points));
-   tpCal.scn_ofst = pCal->scn_ofst;
-
-   return true;
-}
-
-static bool  touchCheckForCalibration(void)
-{
-   return false;
-}
 
 static bool  touchLoadCalibration(void)
 {
-   FILE* fCal;
-   int16_t x,y,ofst;
-   char line[80];
-   char* tok;
-   const char delim[] = "\r\n ";
-
-   if((fCal = fopen(TOUCH_CAL_FILE, "r")) == NULL)
+   bool bSuccess = dev_load_calibration(&tpCal);
+   
+   if(bSuccess)
    {
-      printf("Loading default calibration\r\n");
-      memcpy(&tpCal, &defCal, sizeof(defCal));
-      return false;
+      touchCalculateCalpoints(&tpCal);     
    }
-   else
-   {
-      for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
-      {
-         fgets(line, 80, fCal);
-         tok = strtok(line, delim);
-         x = atoi(tok);
-         tok = strtok(NULL, delim);
-         y = atoi(tok);
-         tpCal.points[i].x = (lv_coord_t)x;
-         tpCal.points[i].y = (lv_coord_t)y;
-      }
-      fgets(line, 80, fCal);
-      tok = strtok(line, delim);
-      ofst = atoi(tok);
-      tpCal.scn_ofst = ofst;
-
-      for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
-      {
-         printf("%d, %d\n", tpCal.points[i].x, tpCal.points[i].y);
-      }
-
-      touchCalculateCalpoints(&tpCal);
-
-      fclose(fCal);
-
-      return true;
-   }
-
+ 
+   return bSuccess;
 
 }
+
 

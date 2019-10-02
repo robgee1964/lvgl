@@ -1,120 +1,108 @@
-/**
- * @file AD_touch.h
+/*****************************************************************************
+ * Simple 4 wire resistive touch screen driver
+ *****************************************************************************
+ * FileName:        TouchScreenResistive.h
+ * Processor:       PIC24F, PIC24H, dsPIC, PIC32
+ * Compiler:       	MPLAB C30, MPLAB C32
+ * Company:         Microchip Technology Incorporated
  *
- */
+ * Software License Agreement
+ *
+ * Copyright � 2011 Microchip Technology Inc.  All rights reserved.
+ * Microchip licenses to you the right to use, modify, copy and distribute
+ * Software only when embedded on a Microchip microcontroller or digital
+ * signal controller, which is integrated into your product or third party
+ * product (pursuant to the sublicense terms in the accompanying license
+ * agreement).
+ *
+ * You should refer to the license agreement accompanying this Software
+ * for additional information regarding your rights and obligations.
+ *
+ * SOFTWARE AND DOCUMENTATION ARE PROVIDED �AS IS� WITHOUT WARRANTY OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION, ANY WARRANTY
+ * OF MERCHANTABILITY, TITLE, NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR
+ * PURPOSE. IN NO EVENT SHALL MICROCHIP OR ITS LICENSORS BE LIABLE OR
+ * OBLIGATED UNDER CONTRACT, NEGLIGENCE, STRICT LIABILITY, CONTRIBUTION,
+ * BREACH OF WARRANTY, OR OTHER LEGAL EQUITABLE THEORY ANY DIRECT OR INDIRECT
+ * DAMAGES OR EXPENSES INCLUDING BUT NOT LIMITED TO ANY INCIDENTAL, SPECIAL,
+ * INDIRECT, PUNITIVE OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA,
+ * COST OF PROCUREMENT OF SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY
+ * CLAIMS BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF),
+ * OR OTHER SIMILAR COSTS.
+ *
+ * Date        	Comment
+ *~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * 01/19/11		Ported from TouchScreen.h.
+ *****************************************************************************/
 
-#ifndef AD_TOUCH_H
-#define AD_TOUCH_H
+/*****************************************************************************
+ Description:  This is a resistive touch screen driver that is using the
+			   Microchip Graphics Library. The calibration values are
+			   automatically checked (by reading a specific memory location
+			   on the non-volatile memory) when initializing the module if the
+			   function pointers to the read and write callback functions
+			   are initialized. If the read value is invalid calibration
+			   will automatically be executed. Otherwise, the calibration
+			   values will be loaded and used.
+			   The driver assumes that the application side provides the
+			   read and write routines to a non-volatile memory.
+			   If the callback functions are not initialized, the calibration
+			   routine will always be called at startup to initialize the
+			   global calibration values.
+			   This driver assumes that the Graphics Library is initialized
+			   and will be using the default font of the library.
+ *****************************************************************************/
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/*********************
- *      INCLUDES
- *********************/
-#ifndef LV_DRV_NO_CONF
-#ifdef LV_CONF_INCLUDE_SIMPLE
-#include "lv_drv_conf.h"
-#else
-#include "../../lv_drv_conf.h"
-#endif
-#endif
-
-#if USE_AD_TOUCH
-
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
-#include "lvgl.h"
-#else
-#include "lvgl/lvgl.h"
-#endif
-
-#define  _SUPPRESS_PLIB_WARNING
-#include <plib.h>
+#ifndef _AD_TOUCH_H
+#define _AD_TOUCH_H
 
 #include "GenericTypeDefs.h"
+#include "lv_drv_conf.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include "lvgl.h"
 
-#define DISP_ORIENTATION    0
-#define DISP_HOR_RESOLUTION 320
-#define DISP_VER_RESOLUTION 240
 
-/*GetMaxX Macro*/
-#if (DISP_ORIENTATION == 90) || (DISP_ORIENTATION == 270)
-#define GetMaxX()   (DISP_VER_RESOLUTION - 1)
-#elif (DISP_ORIENTATION == 0) || (DISP_ORIENTATION == 180)
-#define GetMaxX()   (DISP_HOR_RESOLUTION - 1)
-#endif
 
-/*GetMaxY Macro*/
-#if (DISP_ORIENTATION == 90) || (DISP_ORIENTATION == 270)
-#define GetMaxY()   (DISP_HOR_RESOLUTION - 1)
-#elif (DISP_ORIENTATION == 0) || (DISP_ORIENTATION == 180)
-#define GetMaxY()   (DISP_VER_RESOLUTION - 1)
-#endif
-
-/*********************************************************************
- * HARDWARE PROFILE FOR THE RESISTIVE TOUCHSCREEN
- *********************************************************************/
-
-#define TOUCH_ADC_INPUT_SEL AD1CHS
-
-// ADC Sample Start
-#define TOUCH_ADC_START AD1CON1bits.SAMP
-
-// ADC Status
-#define TOUCH_ADC_DONE AD1CON1bits.DONE
-
-#define RESISTIVETOUCH_ANALOG 1
-#define RESISTIVETOUCH_DIGITAL 0
-
-// ADC channel constants
-#define ADC_XPOS ADC_CH0_POS_SAMPLEA_AN12
-#define ADC_YPOS ADC_CH0_POS_SAMPLEA_AN13
-
-// ADC Port Control Bits
-#define ADPCFG_XPOS AD1PCFGbits.PCFG12 //XR
-#define ADPCFG_YPOS AD1PCFGbits.PCFG13 //YD
-
-// X port definitions
-#define ResistiveTouchScreen_XPlus_Drive_High()     LATBbits.LATB12 = 1
-#define ResistiveTouchScreen_XPlus_Drive_Low()      LATBbits.LATB12 = 0         //LAT_XPOS
-#define ResistiveTouchScreen_XPlus_Config_As_Input()    TRISBbits.TRISB12 = 1 //TRIS_XPOS
-#define ResistiveTouchScreen_XPlus_Config_As_Output()   TRISBbits.TRISB12 = 0
-
-#define ResistiveTouchScreen_XMinus_Drive_High()    LATFbits.LATF0 = 1
-#define ResistiveTouchScreen_XMinus_Drive_Low()     LATFbits.LATF0 = 0         //LAT_XNEG
-#define ResistiveTouchScreen_XMinus_Config_As_Input()   TRISFbits.TRISF0 = 1 //TRIS_XNEG
-#define ResistiveTouchScreen_XMinus_Config_As_Output()  TRISFbits.TRISF0 = 0
-
-// Y port definitions
-#define ResistiveTouchScreen_YPlus_Drive_High() LATBbits.LATB13 = 1
-#define ResistiveTouchScreen_YPlus_Drive_Low()  LATBbits.LATB13 = 0         //LAT_YPOS
-#define ResistiveTouchScreen_YPlus_Config_As_Input()    TRISBbits.TRISB13 = 1 //TRIS_YPOS
-#define ResistiveTouchScreen_YPlus_Config_As_Output()   TRISBbits.TRISB13 = 0
-
-#define ResistiveTouchScreen_YMinus_Drive_High() LATFbits.LATF1 = 1
-#define ResistiveTouchScreen_YMinus_Drive_Low()     LATFbits.LATF1 = 0         //LAT_YNEG
-#define ResistiveTouchScreen_YMinus_Config_As_Input()   TRISFbits.TRISF1 = 1 //TRIS_YNEG
-#define ResistiveTouchScreen_YMinus_Config_As_Output()  TRISFbits.TRISF1 = 0
+#define SAMPLE_POINTS   4
 
 // Default calibration points
-#define TOUCHCAL_ULX 0x0348
-#define TOUCHCAL_ULY 0x00CC
-#define TOUCHCAL_URX 0x00D2
-#define TOUCHCAL_URY 0x00CE
-#define TOUCHCAL_LLX 0x034D
-#define TOUCHCAL_LLY 0x0335
-#define TOUCHCAL_LRX 0x00D6
-#define TOUCHCAL_LRY 0x032D
+#define TOUCHCAL_ULX       107
+#define TOUCHCAL_ULY       224
+#define TOUCHCAL_URX       924
+#define TOUCHCAL_URY       243
+#define TOUCHCAL_LRX       913
+#define TOUCHCAL_LRY       804
+#define TOUCHCAL_LLX       106
+#define TOUCHCAL_LLY       787
+#define TOUCHCAL_DEF_OFST  20
 
-void ad_touch_init(void);
-bool ad_touch_read(lv_indev_data_t *data);
-int16_t ad_touch_handler(void);
+typedef WORD (*t_NVM_Read)(DWORD);           // typedef for read function pointer
+typedef void (*t_NVM_Write)(WORD, DWORD);    // typedef for write function pointer
+typedef void (*t_NVM_SectorErase)(DWORD);    // typedef for sector erase function pointer#
 
-#endif /* USE_AD_TOUCH */
+typedef struct __attribute__ ((packed))
+{
+   lv_point_t  points[SAMPLE_POINTS];
+   WORD        scn_ofst;      // location of calibration circles from corner of screen
+   WORD        crc;
+} t_Tpcal;
 
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
 
-#endif /* AD_TOUCH_H */
+
+
+bool ADtouchInit(void);
+bool 	ADtouchCheckForCalibration(void);
+SHORT ADtouchDetectPosition(void);
+bool ADtouchReadInput(lv_indev_drv_t * drv, lv_indev_data_t*data);
+bool 	ADtouchStoreCalibration(t_Tpcal* pCal);
+bool 	ADtouchLoadCalibration(t_Tpcal* pCal);
+bool ADtouchRead(lv_indev_drv_t * drv, lv_indev_data_t*data);
+
+// use this macro to debug the touch screen panel
+// this will enable the use of debugging functions in the C file.
+// It assumes that the graphics portion is working.
+//#define ENABLE_DEBUG_TOUCHSCREEN
+
+
+#endif //_TOUCHSCREEN_RESISTIVE_H

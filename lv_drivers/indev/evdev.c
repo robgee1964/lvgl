@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <linux/input.h>
 
 /*********************
@@ -38,8 +39,6 @@ int evdev_root_y;
 int evdev_button;
 
 int evdev_key_val;
-
-
 
 /**********************
  *      MACROS
@@ -244,6 +243,69 @@ bool evdev_read(lv_indev_drv_t * drv, lv_indev_data_t * data)
 
 }
 
+bool  evdev_store_calibration(t_Tpcal* pCal)
+{
+   FILE* fCal;
+
+   if((fCal = fopen(TOUCH_CAL_FILE, "w")) == NULL)
+   {
+      return false;
+   }
+
+   // Write out calibration readings
+   for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
+   {
+      fprintf(fCal, "%d %d\n", pCal->points[i].x, pCal->points[i].y);
+   }
+   // Write out the screen offset location for cal point
+   fprintf(fCal, "%d\r\n", pCal->scn_ofst);
+
+   fclose(fCal);
+
+   return true;
+}
+
+bool  evdev_load_calibration(t_Tpcal* pCal)
+{
+   FILE* fCal;
+   int16_t x,y,ofst;
+   char line[80];
+   char* tok;
+   const char delim[] = "\r\n ";
+
+   if((fCal = fopen(TOUCH_CAL_FILE, "r")) == NULL)
+   {
+
+      return false;
+   }
+   else
+   {
+      for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
+      {
+         fgets(line, 80, fCal);
+         tok = strtok(line, delim);
+         x = atoi(tok);
+         tok = strtok(NULL, delim);
+         y = atoi(tok);
+         pCal->points[i].x = (lv_coord_t)x;
+         pCal->points[i].y = (lv_coord_t)y;
+      }
+      fgets(line, 80, fCal);
+      tok = strtok(line, delim);
+      ofst = atoi(tok);
+      pCal->scn_ofst = ofst;
+
+      for(uint32_t i = 0; i < SAMPLE_POINTS; i++)
+      {
+         printf("%d, %d\n",  pCal->points[i].x,  pCal->points[i].y);
+      }
+
+      fclose(fCal);
+
+      return true;
+   }
+}
+
 /**********************
  *   STATIC FUNCTIONS
  **********************/
@@ -251,6 +313,7 @@ int map(int x, int in_min, int in_max, int out_min, int out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
+
 
 
 
